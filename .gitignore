@@ -1,0 +1,5 @@
+bin/
+lancelot_axe
+*.o
+*.bin
+*.elf
