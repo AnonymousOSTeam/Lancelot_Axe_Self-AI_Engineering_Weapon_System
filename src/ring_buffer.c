@@ -1,17 +1,19 @@
 #include "ring_buffer.h"
 #include <string.h>
 
-static bool is_power_of_two(size_t x) {
-    return x && !(x & (x - 1));
-}
+RingBufferStatus ring_buffer_init_from_arena(RingBuffer *rb, Arena *arena, size_t capacity, RingBufferMode mode) {
+    if (rb == NULL || arena == NULL || capacity == 0) {
+        return RING_BUFFER_ERR_INVALID_CAPACITY;
+    }
 
-RingBufferStatus ring_buffer_init(RingBuffer *rb, RingBufferItem *buffer_mem, size_t capacity, RingBufferMode mode) {
-    if (!rb || !buffer_mem) return RING_BUFFER_ERR_INVALID;
-    if (!is_power_of_two(capacity)) return RING_BUFFER_ERR_INVALID_CAPACITY;
+    // Aloca a memória contígua necessária na Arena
+    RingBufferItem *mem = arena_alloc(arena, sizeof(RingBufferItem) * capacity);
+    if (mem == NULL) {
+        return RING_BUFFER_ERR_FULL;
+    }
 
-    rb->buffer = buffer_mem;
+    rb->buffer = mem;
     rb->capacity = capacity;
-    rb->mask = capacity - 1;
     rb->head = 0;
     rb->tail = 0;
     rb->mode = mode;
@@ -19,71 +21,61 @@ RingBufferStatus ring_buffer_init(RingBuffer *rb, RingBufferItem *buffer_mem, si
     return RING_BUFFER_OK;
 }
 
-RingBufferStatus ring_buffer_init_from_arena(RingBuffer *rb, Arena *arena, size_t capacity, RingBufferMode mode) {
-    if (!rb || !arena) return RING_BUFFER_ERR_INVALID;
-    if (!is_power_of_two(capacity)) return RING_BUFFER_ERR_INVALID_CAPACITY;
-
-    RingBufferItem *mem = arena_alloc_align(arena, sizeof(RingBufferItem) * capacity, _Alignof(RingBufferItem));
-    if (!mem) return RING_BUFFER_ERR_INVALID;
-
-    return ring_buffer_init(rb, mem, capacity, mode);
+bool ring_buffer_is_empty(const RingBuffer *rb) {
+    if (rb == NULL) return true;
+    return (rb->head == rb->tail);
 }
 
 bool ring_buffer_is_full(const RingBuffer *rb) {
-    return rb ? ((rb->head - rb->tail) >= rb->capacity) : false;
+    if (rb == NULL) return false;
+    return ((rb->tail + 1) % rb->capacity == rb->head);
 }
 
-bool ring_buffer_is_empty(const RingBuffer *rb) {
-    return rb ? (rb->head == rb->tail) : true;
+size_t ring_buffer_size(const RingBuffer *rb) {
+    if (rb == NULL) return 0;
+    if (rb->tail >= rb->head) {
+        return rb->tail - rb->head;
+    }
+    return rb->capacity - (rb->head - rb->tail);
 }
 
 RingBufferStatus ring_buffer_push(RingBuffer *rb, const RingBufferItem *item) {
-    if (!rb || !item) return RING_BUFFER_ERR_INVALID;
-    if (rb->capacity == 0) return RING_BUFFER_ERR_INVALID_CAPACITY;
+    if (rb == NULL || item == NULL) {
+        return RING_BUFFER_ERR_INVALID_CAPACITY;
+    }
 
     if (ring_buffer_is_full(rb)) {
         if (rb->mode == RING_BUFFER_MODE_STRICT) {
             return RING_BUFFER_ERR_FULL;
+        } else if (rb->mode == RING_BUFFER_MODE_OVERWRITE) {
+            // No modo OVERWRITE, avança o head para descartar o item mais antigo
+            rb->head = (rb->head + 1) % rb->capacity;
         }
-        rb->tail++;
     }
 
-    size_t index = rb->head & rb->mask;
-    rb->buffer[index] = *item;
-    rb->head++;
+    rb->buffer[rb->tail] = *item;
+    rb->tail = (rb->tail + 1) % rb->capacity;
 
     return RING_BUFFER_OK;
 }
 
 RingBufferStatus ring_buffer_pop(RingBuffer *rb, RingBufferItem *out_item) {
-    if (!rb || !out_item) return RING_BUFFER_ERR_INVALID;
-    if (rb->capacity == 0) return RING_BUFFER_ERR_INVALID_CAPACITY;
-    if (ring_buffer_is_empty(rb)) return RING_BUFFER_ERR_EMPTY;
+    if (rb == NULL || out_item == NULL) {
+        return RING_BUFFER_ERR_INVALID_CAPACITY;
+    }
 
-    size_t index = rb->tail & rb->mask;
-    *out_item = rb->buffer[index];
-    rb->tail++;
+    if (ring_buffer_is_empty(rb)) {
+        return RING_BUFFER_ERR_EMPTY;
+    }
 
-    return RING_BUFFER_OK;
-}
-
-RingBufferStatus ring_buffer_peek(const RingBuffer *rb, RingBufferItem *out_item) {
-    if (!rb || !out_item) return RING_BUFFER_ERR_INVALID;
-    if (rb->capacity == 0) return RING_BUFFER_ERR_INVALID_CAPACITY;
-    if (ring_buffer_is_empty(rb)) return RING_BUFFER_ERR_EMPTY;
-
-    size_t index = rb->tail & rb->mask;
-    *out_item = rb->buffer[index];
+    *out_item = rb->buffer[rb->head];
+    rb->head = (rb->head + 1) % rb->capacity;
 
     return RING_BUFFER_OK;
-}
-
-size_t ring_buffer_size(const RingBuffer *rb) {
-    return rb ? (rb->head - rb->tail) : 0;
 }
 
 void ring_buffer_clear(RingBuffer *rb) {
-    if (rb && rb->capacity > 0) {
+    if (rb != NULL) {
         rb->head = 0;
         rb->tail = 0;
     }

@@ -3,3 +3,5 @@ lancelot_axe
 *.o
 *.bin
 *.elf
+bin_test_asan
+bin/
