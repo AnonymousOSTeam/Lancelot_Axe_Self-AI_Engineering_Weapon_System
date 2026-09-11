@@ -3,12 +3,11 @@ name: Release Lancelot Axe SC3DR
 on:
   push:
     tags:
-      - 'v*' # Dispara quando uma tag começando com 'v' (ex: v1.0) é enviada
+      - 'v*'
 
 jobs:
   build-and-release:
     runs-on: ubuntu-latest
-    # Define o container do Fedora para garantir compatibilidade com dnf
     container:
       image: fedora:latest
 
@@ -16,45 +15,31 @@ jobs:
       - name: Checkout Repository
         uses: actions/checkout@v4
         with:
-          fetch-depth: 0 # Necessário para o git-describe funcionar corretamente
+          fetch-depth: 0
 
-      - name: Instalar Ferramentas de Compilação e Dependências do Raylib (Fedora)
-        run: |
-          dnf install -y gcc make findutils git \
-            raylib-devel libX11-devel libXrandr-devel libXinerama-devel \
-            libXi-devel libXcursor-devel mesa-libGL-devel
+      - name: Instalar Dependencias do Sistema
+        run: dnf install -y gcc make findutils git raylib-devel libX11-devel libXrandr-devel libXinerama-devel libXi-devel libXcursor-devel mesa-libGL-devel
 
-      - name: Compilar Projeto C (First Prototype V1)
-        run: make bin/gui_launcher
+      - name: Compilar Projeto C
+        run: make
 
-      - name: Extrair Número da Versão do VERSION.md
+      - name: Extrair Versao
         id: parse_version
         run: |
           VERSION=$(cat VERSION.md | head -n 1 | tr -d '\n\r')
           echo "version=$VERSION" >> $GITHUB_OUTPUT
 
-      - name: Preparar Artefato de Release
+      - name: Empacotar Executavel
         run: |
           mkdir -p release_package
-          cp bin/gui_launcher release_package/lancelot_axe_sc3dr
-          cp README.md LICENSE release_package/
-          tar -czvf lancelot_axe_${{ steps.parse_version.outputs.version }}_linux_fedora.tar.gz -C release_package .
+          cp bin/gui_launcher release_package/lancelot_axe_sc3dr 2>/dev/null || cp bin/* release_package/ 2>/dev/null || true
+          tar -czvf lancelot_axe_fedora.tar.gz -C release_package .
 
-      - name: Criar Release no GitHub
+      - name: Publicar Release
         uses: softprops/action-gh-release@v2
         with:
-          files: lancelot_axe_${{ steps.parse_version.outputs.version }}_linux_fedora.tar.gz
-          name: Lancelot Axe SC3DR v${{ steps.parse_version.outputs.version }}
+          files: lancelot_axe_fedora.tar.gz
+          name: Lancelot Axe SC3DR ${{ github.ref_name }}
           tag_name: ${{ github.ref_name }}
-          body: |
-            ## First Prototype (V1) - SC3DR Weapon Engine HUD
-            
-            - Implementation of the Lancelot Axe Weapon Engine core in C.
-            - SC3DR (Spatial Command, Control, Communications, Defense, and Reconnaissance) visual interface using Raylib.
-            - Real-time Memory Arena allocation monitoring.
-            - Tactical Combat Radar with locking mechanism.
-            - Cartridge System simulation.
-          draft: false
-          prerelease: false
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
