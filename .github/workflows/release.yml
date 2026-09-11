@@ -1,68 +1,59 @@
-name: Aggressive Automated Release
+name: Release Lancelot Axe SC3DR
 
 on:
   push:
-    branches:
-      - master
-    paths:
-      - 'VERSION.md'
-      - 'src/**'
-      - 'include/**'
-      - '.github/workflows/release.yml'
+    tags:
+      - 'v*' # Dispara quando uma tag começando com 'v' (ex: v1.0) é enviada
 
 jobs:
-  release:
+  build-and-release:
     runs-on: ubuntu-latest
-    permissions:
-      contents: write
+    # Define o container do Fedora para garantir compatibilidade com dnf
     container:
       image: fedora:latest
+
     steps:
       - name: Checkout Repository
         uses: actions/checkout@v4
         with:
-          fetch-depth: 0
+          fetch-depth: 0 # Necessário para o git-describe funcionar corretamente
 
-      - name: Instalar Ferramentas de Compilação no Fedora
-        run: dnf install -y gcc make findutils git
+      - name: Instalar Ferramentas de Compilação e Dependências do Raylib
+        run: |
+          dnf install -y gcc make findutils git \
+            raylib-devel libX11-devel libXrandr-devel libXinerama-devel \
+            libXi-devel libXcursor-devel mesa-libGL-devel
 
-      - name: Checkout Repository
-      uses: actions/checkout@v4
-
-    - name: Install Dependencies (Raylib)
-      run: |
-        sudo apt-get update
-        sudo apt-get install -y libraylib-dev libx11-dev libxrandr-dev libxinerama-dev libxi-dev libxcursor-dev libgl1-mesa-dev
-
-    - name: Compilar Projeto C
-      run: make
+      - name: Compilar Projeto C (First Prototype V1)
+        run: make bin/gui_launcher
 
       - name: Extrair Número da Versão do VERSION.md
         id: parse_version
         run: |
-          VERSION_NUM=$(grep -m 1 "^# Version" VERSION.md | awk '{print $3}')
-          echo "VERSION=$VERSION_NUM" >> $GITHUB_OUTPUT
-          echo "Versão detectada: $VERSION_NUM"
+          VERSION=$(cat VERSION.md | head -n 1 | tr -d '\n\r')
+          echo "version=$VERSION" >> $GITHUB_OUTPUT
 
-      - name: Verificação e Criação de Tag Git
-        id: tag_check
+      - name: Preparar Artefato de Release
         run: |
-          TAG_NAME="v${{ steps.parse_version.outputs.VERSION }}"
-          if git rev-parse "$TAG_NAME" >/dev/null 2>&1; then
-            echo "TAG_EXISTS=true" >> $GITHUB_OUTPUT
-            echo "A tag $TAG_NAME já existe. Pulando a criação de release."
-          else
-            echo "TAG_EXISTS=false" >> $GITHUB_OUTPUT
-            echo "Nova versão detectada: $TAG_NAME"
-          fi
+          mkdir -p release_package
+          cp bin/gui_launcher release_package/lancelot_axe_sc3dr
+          cp README.md LICENSE release_package/
+          tar -czvf lancelot_axe_${{ steps.parse_version.outputs.version }}_linux_fedora.tar.gz -C release_package .
 
-      - name: Publicar Release no GitHub
-        if: steps.tag_check.outputs.TAG_EXISTS == 'false'
+      - name: Criar Release no GitHub
         uses: softprops/action-gh-release@v2
         with:
-          tag_name: v${{ steps.parse_version.outputs.VERSION }}
-          body_path: VERSION.md
-          files: bin/system_core
+          files: lancelot_axe_${{ steps.parse_version.outputs.version }}_linux_fedora.tar.gz
+          name: Lancelot Axe SC3DR v${{ steps.parse_version.outputs.version }}
+          tag_name: ${{ github.ref_name }}
+          body: |
+            ## First Prototype (V1) - SC3DR Weapon Engine HUD
+            
+            - Implementation of the Lancelot Axe Weapon Engine core in C.
+            - SC3DR (Spatial Command, Control, Communications, Defense, and Reconnaissance) visual interface using Raylib.
+            - Real-time Memory Arena allocation monitoring.
+            - Tactical Combat Radar with locking mechanism.
+            - Cartridge System simulation.
           draft: false
           prerelease: false
         env:
