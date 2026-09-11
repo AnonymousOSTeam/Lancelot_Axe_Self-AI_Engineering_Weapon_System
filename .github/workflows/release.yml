@@ -8,38 +8,31 @@ on:
 jobs:
   build-and-release:
     runs-on: ubuntu-latest
-    container:
-      image: fedora:latest
 
     steps:
-      - name: Checkout Repository
+      - name: Checkout repository
         uses: actions/checkout@v4
-        with:
-          fetch-depth: 0
 
-      - name: Instalar Dependencias do Sistema
-        run: dnf install -y gcc make findutils git raylib-devel libX11-devel libXrandr-devel libXinerama-devel libXi-devel libXcursor-devel mesa-libGL-devel
-
-      - name: Compilar Projeto C
-        run: make
-
-      - name: Extrair Versao
-        id: parse_version
+      - name: Install Dependencies
         run: |
-          VERSION=$(cat VERSION.md | head -n 1 | tr -d '\n\r')
-          echo "version=$VERSION" >> $GITHUB_OUTPUT
+          sudo apt-get update
+          sudo apt-get install -y build-essential libraylib-dev libx11-dev libgl1-mesa-dev libxrandr-dev libxinerama-dev libxcursor-dev libxi-dev
 
-      - name: Empacotar Executavel
+      - name: Build Project
         run: |
-          mkdir -p release_package
-          cp bin/gui_launcher release_package/lancelot_axe_sc3dr 2>/dev/null || cp bin/* release_package/ 2>/dev/null || true
-          tar -czvf lancelot_axe_fedora.tar.gz -C release_package .
+          make clean
+          make
 
-      - name: Publicar Release
-        uses: softprops/action-gh-release@v2
+      - name: Create Release Package
+        run: |
+          mkdir -p release_dist
+          cp bin/gui_launcher release_dist/
+          cp bin/cli_tests release_dist/
+          tar -czvf lancelot_axe_release.tar.gz -C release_dist .
+
+      - name: Create GitHub Release
+        uses: softprops/action-gh-release@v1
         with:
-          files: lancelot_axe_fedora.tar.gz
-          name: Lancelot Axe SC3DR ${{ github.ref_name }}
-          tag_name: ${{ github.ref_name }}
+          files: lancelot_axe_release.tar.gz
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
