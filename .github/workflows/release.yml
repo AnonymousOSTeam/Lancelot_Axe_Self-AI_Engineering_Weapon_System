@@ -18,7 +18,7 @@ jobs:
         with:
           fetch-depth: 0 # Necessário para o git-describe funcionar corretamente
 
-      - name: Instalar Ferramentas de Compilação e Dependências do Raylib
+      - name: Instalar Ferramentas de Compilação e Dependências do Raylib (Fedora)
         run: |
           dnf install -y gcc make findutils git \
             raylib-devel libX11-devel libXrandr-devel libXinerama-devel \
