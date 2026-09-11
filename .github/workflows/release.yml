@@ -26,8 +26,16 @@ jobs:
       - name: Instalar Ferramentas de Compilação no Fedora
         run: dnf install -y gcc make findutils git
 
-      - name: Compilar Projeto C
-        run: make
+      - name: Checkout Repository
+      uses: actions/checkout@v4
+
+    - name: Install Dependencies (Raylib)
+      run: |
+        sudo apt-get update
+        sudo apt-get install -y libraylib-dev libx11-dev libxrandr-dev libxinerama-dev libxi-dev libxcursor-dev libgl1-mesa-dev
+
+    - name: Compilar Projeto C
+      run: make
 
       - name: Extrair Número da Versão do VERSION.md
         id: parse_version
