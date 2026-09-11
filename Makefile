@@ -1,84 +1,52 @@
-# ==============================================================================
-# Lancelot Axe - Project Build Automation
-# ==============================================================================
+CC = gcc
+CFLAGS = -Wall -Wextra -Werror -std=c11 -Iinclude
+LDFLAGS = -lraylib -lGL -lm -lpthread -ldl -lrt -lX11
 
-CC        := gcc
-CFLAGS    := -Wall -Wextra -Werror -std=c11 -pedantic -Iinclude -MMD -MP
-SANFLAGS  := -g -fsanitize=address,undefined -fno-omit-frame-pointer
+SRC_DIR = src
+BUILD_DIR = build/normal
+BIN_DIR = bin
 
-# Diretorios
-SRC_DIR   := src
-INC_DIR   := include
-BUILD_DIR := build
-BIN_DIR   := bin
+# Módulos compartilhados do sistema
+CORE_SRCS = $(SRC_DIR)/arena.c \
+            $(SRC_DIR)/ring_buffer.c \
+            $(SRC_DIR)/device.c \
+            $(SRC_DIR)/module_defense.c \
+            $(SRC_DIR)/module_navigation.c
 
-# Arquivos fonte e objetos
-SRCS      := $(wildcard $(SRC_DIR)/*.c)
-OBJS      := $(patsubst $(SRC_DIR)/%.c, $(BUILD_DIR)/normal/%.o, $(SRCS))
-OBJS_SAN  := $(patsubst $(SRC_DIR)/%.c, $(BUILD_DIR)/san/%.o, $(SRCS))
-DEPS      := $(OBJS:.o=.d) $(OBJS_SAN:.o=.d)
+CORE_OBJS = $(patsubst $(SRC_DIR)/%.c, $(BUILD_DIR)/%.o, $(CORE_SRCS))
 
-# Nomes dos binarios
-TARGET     := $(BIN_DIR)/lancelot_axe
-TARGET_SAN := $(BIN_DIR)/bin_test_asan
+# Binários finais
+GUI_TARGET = $(BIN_DIR)/gui_launcher
+CLI_TARGET = $(BIN_DIR)/cli_tests
 
-# Colorization helper
-NO_COLOR   := \033[0m
-OK_COLOR   := \033[32;01m
-WARN_COLOR := \033[33;01m
-ERROR_COLOR:= \033[31;01m
+all: $(GUI_TARGET) $(CLI_TARGET)
 
-.PHONY: all sanitize run test clean help
+# Compilação da interface gráfica Raylib
+$(GUI_TARGET): $(CORE_OBJS) $(BUILD_DIR)/gui_main.o | $(BIN_DIR)
+	@mkdir -p $(BIN_DIR)
+	@echo "\033[32;01m[LINK] Linking $@\033[0m"
+	$(CC) $^ -o $@ $(LDFLAGS)
 
-# Targets padrao
-all: $(TARGET)
+# Compilação do teste de integração via CLI
+$(CLI_TARGET): $(CORE_OBJS) $(BUILD_DIR)/main.o | $(BIN_DIR)
+	@mkdir -p $(BIN_DIR)
+	@echo "\033[32;01m[LINK] Linking $@\033[0m"
+	$(CC) $^ -o $@ $(LDFLAGS)
 
-sanitize: $(TARGET_SAN)
+# Regra de compilação dos objetos .o
+$(BUILD_DIR)/%.o: $(SRC_DIR)/%.c | $(BUILD_DIR)
+	@mkdir -p $(BUILD_DIR)
+	@echo "\033[32;01m[CC]   Compiling $<\033[0m"
+	$(CC) $(CFLAGS) -c $< -o $@
 
-# Build Padrão
-$(TARGET): $(OBJS) | $(BIN_DIR)
-	@echo "$(OK_COLOR)[LINK] Linking $@$(NO_COLOR)"
-	@$(CC) $(CFLAGS) $^ -o $@
+$(BUILD_DIR):
+	mkdir -p $(BUILD_DIR)
 
-$(BUILD_DIR)/normal/%.o: $(SRC_DIR)/%.c | $(BUILD_DIR)/normal
-	@echo "$(OK_COLOR)[CC]   Compiling $<$(NO_COLOR)"
-	@$(CC) $(CFLAGS) -O2 -c $< -o $@
+$(BIN_DIR):
+	mkdir -p $(BIN_DIR)
 
-# Build com Sanitizers (ASan / UBSan)
-$(TARGET_SAN): $(OBJS_SAN) | $(BIN_DIR)
-	@echo "$(WARN_COLOR)[LINK] Linking $@ (Sanitizers Enabled)$(NO_COLOR)"
-	@$(CC) $(CFLAGS) $(SANFLAGS) $^ -o $@
-
-$(BUILD_DIR)/san/%.o: $(SRC_DIR)/%.c | $(BUILD_DIR)/san
-	@echo "$(WARN_COLOR)[CC]   Compiling $< (Sanitizers Enabled)$(NO_COLOR)"
-	@$(CC) $(CFLAGS) $(SANFLAGS) -c $< -o $@
-
-# Criacao das pastas de output
-$(BIN_DIR) $(BUILD_DIR)/normal $(BUILD_DIR)/san:
-	@mkdir -p $@
-
-# Execucao dos binarios
-run: $(TARGET)
-	@echo "$(OK_COLOR)[RUN] Executing $(TARGET)...$(NO_COLOR)"
-	@./$(TARGET)
-
-test: $(TARGET_SAN)
-	@echo "$(WARN_COLOR)[TEST] Executing $(TARGET_SAN) with ASan/UBSan...$(NO_COLOR)"
-	@./$(TARGET_SAN)
-
-# Limpeza completa de artefatos
 clean:
-	@echo "$(ERROR_COLOR)[CLEAN] Removing build artifacts...$(NO_COLOR)"
-	@rm -rf $(BUILD_DIR) $(BIN_DIR)
+	@echo "\033[31;01m[CLEAN] Removing build artifacts...\033[0m"
+	rm -rf $(BUILD_DIR) $(BIN_DIR)
 
-# Inclui arquivos de dependencia gerados automaticamente pelo GCC (-MMD -MP)
--include $(DEPS)
-
-# Ajuda basica
-help:
-	@echo "Lancelot Axe Build System"
-	@echo "  make          - Compila o projeto em modo otimizado (O2)"
-	@echo "  make sanitize - Compila o projeto com ASan e UBSan ativados"
-	@echo "  make run      - Compila e executa o binario padrao"
-	@echo "  make test     - Compila e executa o binario de teste com sanitizers"
-	@echo "  make clean    - Remove as pastas 'build/' e 'bin/'"
+.PHONY: all clean
